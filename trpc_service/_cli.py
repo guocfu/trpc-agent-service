@@ -112,6 +112,9 @@ def main(
 
     if args.command == "gateway" or args.command == "web":
         configure_logging("gateway", environment)
+        from trpc_service.channels.feishu.sdk import preload_feishu_sdk
+
+        preload_feishu_sdk()
         runner = _run_server if server_runner is None else server_runner
         runner(
             "trpc_service.gateway.app:create_gateway_app",
@@ -252,7 +255,7 @@ def main(
         # output line below is fixed safe text: tenant configuration, DSNs,
         # content, digests and upstream exception strings never print, and
         # exit codes are 0 success / 1 unavailable / 2 refused-or-misconfigured.
-        from trpc_service.agent.state_backend import StateBackendConfigurationError
+        from trpc_service.storage.state_backend import StateBackendConfigurationError
         from trpc_service.config.tenant_repository import TenantRepositoryConfigurationError
         from trpc_service.storage.message_repository import (
             MessageReceiptRepositoryConfigurationError,
@@ -269,7 +272,7 @@ def main(
             return 2
 
         async def _run_state_migration() -> int:
-            from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+            from trpc_service.storage.backend_resolver import TenantStateBackendResolver
             from trpc_service.storage.state_migration import migrate_tenant_state
 
             tenant_repository = None

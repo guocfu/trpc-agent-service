@@ -19,7 +19,7 @@ import pytest
 from trpc_agent_sdk.memory import BaseMemoryService, SqlMemoryService
 from trpc_agent_sdk.sessions import BaseSessionService, SqlSessionService
 
-from trpc_service.agent.state_backend import (
+from trpc_service.storage.state_backend import (
     SqlStateBackend,
     StateBackendConfigurationError,
 )
@@ -51,8 +51,8 @@ def fake_services():
     asyncpg get_session defect) — patching it proves from_env constructs the
     SUBCLASS, not a raw SqlSessionService.
     """
-    with patch("trpc_service.agent.state_backend._Sdk1116GetSessionFix") as session_cls, \
-            patch("trpc_service.agent.state_backend.SqlMemoryService") as memory_cls:
+    with patch("trpc_service.storage.state_backend._Sdk1116GetSessionFix") as session_cls, \
+            patch("trpc_service.storage.state_backend.SqlMemoryService") as memory_cls:
         session_cls.return_value = _FakeService()
         memory_cls.return_value = _FakeService()
         yield session_cls, memory_cls
@@ -62,12 +62,12 @@ class TestSdk1116GetSessionFix:
     """The narrow subclass: refresh-after-commit, nothing else."""
 
     def test_is_public_sql_session_subclass(self):
-        from trpc_service.agent.state_backend import _Sdk1116GetSessionFix
+        from trpc_service.storage.state_backend import _Sdk1116GetSessionFix
         assert issubclass(_Sdk1116GetSessionFix, SqlSessionService)
 
     @pytest.mark.asyncio
     async def test_get_session_override_refreshes_hit(self):
-        from trpc_service.agent.state_backend import _Sdk1116GetSessionFix
+        from trpc_service.storage.state_backend import _Sdk1116GetSessionFix
 
         obj = object()
         refreshed = []
@@ -86,7 +86,7 @@ class TestSdk1116GetSessionFix:
 
     @pytest.mark.asyncio
     async def test_get_session_override_skips_miss(self):
-        from trpc_service.agent.state_backend import _Sdk1116GetSessionFix
+        from trpc_service.storage.state_backend import _Sdk1116GetSessionFix
 
         refreshed = []
 
@@ -108,7 +108,7 @@ class TestSdk1116GetSessionFix:
         session service IS the fix subclass and the public options are set."""
         backend = SqlStateBackend.from_env(_env())
         try:
-            from trpc_service.agent.state_backend import _Sdk1116GetSessionFix
+            from trpc_service.storage.state_backend import _Sdk1116GetSessionFix
             assert isinstance(backend.session_service, _Sdk1116GetSessionFix)
             assert isinstance(backend.session_service, SqlSessionService)
             assert isinstance(backend.memory_service, SqlMemoryService)
@@ -119,7 +119,7 @@ class TestSdk1116GetSessionFix:
 
     def test_redis_backend_untouched(self):
         """The fix must not leak into the Redis path."""
-        from trpc_service.agent.state_backend import RedisStateBackend
+        from trpc_service.storage.state_backend import RedisStateBackend
         assert issubclass(RedisStateBackend, object)
         assert RedisStateBackend.__mro__[1] is object
         import inspect
@@ -247,7 +247,7 @@ class TestSqlStateBackendFromEnvConfig:
 
     def test_service_construction_failure_is_sanitized(self):
         with patch(
-                "trpc_service.agent.state_backend.SqlSessionService",
+                "trpc_service.storage.state_backend.SqlSessionService",
                 side_effect=RuntimeError(f"cannot connect {VALID_URL}"),
         ):
             with pytest.raises(StateBackendConfigurationError) as exc_info:
@@ -308,7 +308,7 @@ class TestSqlStateBackendLifecycle:
                 raise RuntimeError("close failed")
 
         backend._session_service = Boom()
-        with caplog.at_level(logging.WARNING, logger="trpc_service.agent.state_backend"):
+        with caplog.at_level(logging.WARNING, logger="trpc_service.storage.state_backend"):
             asyncio.run(backend.close())
         # memory service (constructed second) still closed despite the failure
         assert backend.memory_service.close_calls == 1

@@ -562,6 +562,21 @@ class TestSdkImportBoundary:
                 offenders.append(str(path.relative_to(service_root)))
         assert offenders == []
 
+    def test_gateway_preloads_sdk_before_starting_server(self, monkeypatch: pytest.MonkeyPatch):
+        from trpc_service import _cli
+        from trpc_service.channels.feishu import sdk
+
+        events: list[str] = []
+        monkeypatch.setattr(sdk, "preload_feishu_sdk", lambda: events.append("preload"))
+
+        def fake_runner(*args, **kwargs):
+            events.append("server")
+
+        result = _cli.main(["gateway"], server_runner=fake_runner, environ={})
+
+        assert result == 0
+        assert events == ["preload", "server"]
+
 
 class TestCreateFeishuClient:
 

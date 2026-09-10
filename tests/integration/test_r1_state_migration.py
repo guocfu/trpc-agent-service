@@ -29,7 +29,7 @@ from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.types import EventActions
 
 from trpc_service.agent.app import AgentApp
-from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+from trpc_service.storage.backend_resolver import TenantStateBackendResolver
 from trpc_service.config.tenant import TenantConfig
 from trpc_service.storage.message_repository import ReceiptAction, SqlMessageReceiptRepository
 from trpc_service.storage.state_migration import (

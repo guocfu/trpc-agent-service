@@ -1,4 +1,4 @@
-"""Feishu AI Bot long-connection service — bridges SDK frames to ChannelIngressService.
+"""Feishu AI Bot long-connection service — bridges SDK frames to the ChannelIngress contract.
 
 P0 fix: use streaming writer (append/finish) instead of per-delta reply().
 """
@@ -7,18 +7,15 @@ from __future__ import annotations
 
 import logging
 import uuid
-import asyncio
-import inspect
 from contextlib import aclosing
 
 from trpc_service.channels.binding import ChannelBinding
-from trpc_service.channels.delivery import ChannelSendError, send_with_retry
+from trpc_service.channels.delivery import SdkReplySender, record_terminal_delivery
 from trpc_service.channels.feishu.adapter import _SAFE_ERROR_TEXT, FeishuChannelAdapter
 from trpc_service.channels.feishu.sdk import FeishuClient, FeishuInboundFrame, create_feishu_client
 from trpc_service.channels.feishu.settings import FeishuSettings
+from trpc_service.channels.ingress import ChannelIngress
 from trpc_service.channels.policy import UNSUPPORTED_MESSAGE_REPLY, bind_message, split_text
-from trpc_service.gateway.channel_service import ChannelIngressService
-from trpc_service.transport.models import WorkerErrorCode
 from trpc_service.telemetry.runtime import (
     ATTR_REPLY_COUNT,
     ATTR_RESULT,
@@ -33,7 +30,7 @@ logger = logging.getLogger(__name__)
 class FeishuAibotService:
     """Manages the Feishu SDK connection and routes text frames to the agent pipeline.
 
-    Each inbound text frame triggers exactly one ``ChannelIngressService.stream()``
+    Each inbound text frame triggers exactly one ``ChannelIngress.stream()``
     call.  Public events are forwarded via a streaming writer (append/finish).
     Tool events are suppressed; error events produce a safe fixed text.
     """
@@ -42,7 +39,7 @@ class FeishuAibotService:
         self,
         settings: FeishuSettings,
         client: FeishuClient,
-        ingress: ChannelIngressService,
+        ingress: ChannelIngress,
         *,
         binding: ChannelBinding,
         order_gate: object | None,
@@ -168,18 +165,12 @@ class FeishuAibotService:
             logger.warning("Feishu unsupported-message reply failed (channel=feishu)")
 
     async def _record_terminal_delivery(self, execution, category: str) -> None:
-        recorder = getattr(self._ingress, "record_external_delivery", None)
-        if recorder is None:
-            return
-        code = (WorkerErrorCode.CHANNEL_DELIVERY_FAILED if category in {"append_failed", "finish_failed"} else None)
-        # A broken Worker stream or a missing terminal does not prove that a
-        # platform terminal message was delivered.  Do not create a false
-        # success audit fact in those indeterminate cases.
-        if code is None and category not in {"done", "error"}:
-            return
-        result = recorder(execution, code)
-        if inspect.isawaitable(result):
-            await result
+        await record_terminal_delivery(
+            self._ingress,
+            execution,
+            category,
+            failure_categories=frozenset({"append_failed", "finish_failed"}),
+        )
 
     async def _run_reply_chain(self, frame: FeishuInboundFrame, execution) -> tuple[str, int]:
         """Drive one reply chain; returns (fixed terminal category, writes).
@@ -194,30 +185,10 @@ class FeishuAibotService:
 
         event_count = 0
         writer = None
-        sdk_sent = False
+        sender = SdkReplySender()
 
         async def _write(method, *args) -> bool:
-            nonlocal sdk_sent
-
-            async def _once() -> None:
-                try:
-                    await method(*args)
-                except asyncio.CancelledError:
-                    raise
-                except ChannelSendError:
-                    raise
-                except Exception:
-                    raise ChannelSendError(sent=False) from None
-
-            if sdk_sent:
-                try:
-                    await _once()
-                except ChannelSendError:
-                    return False
-            elif not await send_with_retry(_once):
-                return False
-            sdk_sent = True
-            return True
+            return await sender.write(method, *args)
 
         try:
             writer = await self._client.open_reply_stream(frame)
@@ -302,7 +273,7 @@ class FeishuAibotService:
 
 def create_feishu_service(
     settings: FeishuSettings | None,
-    ingress: ChannelIngressService,
+    ingress: ChannelIngress,
     *,
     binding: ChannelBinding | None = None,
     order_gate: object | None = None,

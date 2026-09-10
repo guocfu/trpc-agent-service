@@ -1,9 +1,8 @@
-"""WeCom AI Bot long-connection service — bridges SDK frames to ChannelIngressService."""
+"""WeCom AI Bot long-connection service — bridges SDK frames to the ChannelIngress contract."""
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 import time
 import uuid
@@ -12,14 +11,13 @@ from contextlib import aclosing
 from typing import Any
 
 from trpc_service.channels.binding import ChannelBinding
-from trpc_service.channels.delivery import ChannelSendError, send_with_retry
+from trpc_service.channels.delivery import SdkReplySender, record_terminal_delivery
+from trpc_service.channels.ingress import ChannelIngress
 from trpc_service.channels.order_gate import ChannelOrderGateUnavailableError
 from trpc_service.channels.policy import CHANNEL_TEXT_LIMIT, UNSUPPORTED_MESSAGE_REPLY, bind_message
 from trpc_service.channels.wecom.adapter import WeComChannelAdapter, WeComReply
 from trpc_service.channels.wecom.sdk import WeComClient, create_wecom_client
 from trpc_service.channels.wecom.settings import WeComSettings
-from trpc_service.gateway.channel_service import ChannelIngressService
-from trpc_service.transport.models import WorkerErrorCode
 from trpc_service.telemetry.runtime import (
     ATTR_REPLY_COUNT,
     ATTR_RESULT,
@@ -41,7 +39,7 @@ class WeComAuthenticationError(Exception):
 class WeComAibotService:
     """Manages the WeCom SDK connection and routes text frames to the agent pipeline.
 
-    Each inbound text frame triggers exactly one ``ChannelIngressService.stream()``
+    Each inbound text frame triggers exactly one ``ChannelIngress.stream()``
     call.  Public events are forwarded as SDK streaming replies.  Tool events are
     suppressed; error events produce a safe fixed text.
     """
@@ -50,7 +48,7 @@ class WeComAibotService:
         self,
         settings: WeComSettings,
         client: WeComClient,
-        ingress: ChannelIngressService,
+        ingress: ChannelIngress,
         auth_timeout: float = AUTH_TIMEOUT_SECONDS,
         tracer: object | None = None,
         reply_flush_interval: float = REPLY_FLUSH_INTERVAL_SECONDS,
@@ -204,17 +202,12 @@ class WeComAibotService:
             logger.warning("WeCom SDK reply failed (channel=wecom, event_type=unsupported)")
 
     async def _record_terminal_delivery(self, execution, category: str) -> None:
-        recorder = getattr(self._ingress, "record_external_delivery", None)
-        if recorder is None:
-            return
-        code = WorkerErrorCode.CHANNEL_DELIVERY_FAILED if category == "reply_failed" else None
-        # ``stream_failed`` and ``missing`` do not establish a terminal SDK
-        # delivery, so neither may be represented as a delivered audit row.
-        if code is None and category not in {"done", "error"}:
-            return
-        result = recorder(execution, code)
-        if inspect.isawaitable(result):
-            await result
+        await record_terminal_delivery(
+            self._ingress,
+            execution,
+            category,
+            failure_categories=frozenset({"reply_failed"}),
+        )
 
     async def _run_reply_chain(self, frame: dict[str, Any], execution) -> tuple[str, int]:
         """Drive one reply chain; returns (fixed terminal category, count).
@@ -235,34 +228,13 @@ class WeComAibotService:
         accumulated_text = ""
         segment_closed = False
         last_flush_at: float | None = None
-        sdk_sent = False
+        sender = SdkReplySender()
 
         async def send(text: str, *, finished: bool) -> bool:
-            nonlocal event_count, last_flush_at, sdk_sent
-
-            async def _send_once() -> None:
-                try:
-                    await self._client.reply_stream(
-                        frame,
-                        stream_id=stream_id,
-                        text=text,
-                        finished=finished,
-                    )
-                except asyncio.CancelledError:
-                    raise
-                except ChannelSendError:
-                    raise
-                except Exception:
-                    raise ChannelSendError(sent=False) from None
-
-            if sdk_sent:
-                try:
-                    await _send_once()
-                except ChannelSendError:
-                    return False
-            elif not await send_with_retry(_send_once):
+            nonlocal event_count, last_flush_at
+            if not await sender.write(
+                    self._client.reply_stream, frame, stream_id=stream_id, text=text, finished=finished):
                 return False
-            sdk_sent = True
             last_flush_at = self._clock()
             event_count += 1
             return True
@@ -367,7 +339,7 @@ class WeComAibotService:
 
 def create_wecom_service(
     settings: WeComSettings | None,
-    ingress: ChannelIngressService,
+    ingress: ChannelIngress,
     client: WeComClient | None = None,
     tracer: object | None = None,
     binding: ChannelBinding | None = None,

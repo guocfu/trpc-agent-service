@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Literal
 from trpc_agent_sdk.types import State
 
 if TYPE_CHECKING:
-    from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+    from trpc_service.storage.backend_resolver import TenantStateBackendResolver
     from trpc_service.config.tenant_repository import TenantConfigRepository
     from trpc_service.storage.message_repository import MessageReceiptRepository
 

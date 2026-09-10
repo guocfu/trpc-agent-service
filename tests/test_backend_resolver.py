@@ -14,8 +14,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from trpc_service.agent.backend_resolver import TenantStateBackendResolver
-from trpc_service.agent.state_backend import (
+from trpc_service.storage.backend_resolver import TenantStateBackendResolver
+from trpc_service.storage.state_backend import (
     AgentStateBackend,
     RedisStateBackend,
     SqlStateBackend,

@@ -22,7 +22,7 @@ from trpc_agent_sdk.memory import MemoryServiceConfig, RedisMemoryService
 from trpc_agent_sdk.sessions import RedisSessionService, SessionServiceConfig
 from trpc_agent_sdk.types import Ttl
 
-from trpc_service.agent.state_backend import RedisStateBackend, StateBackendConfigurationError
+from trpc_service.storage.state_backend import RedisStateBackend, StateBackendConfigurationError
 
 
 def _docker_is_available() -> bool:

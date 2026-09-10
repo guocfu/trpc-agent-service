@@ -1,7 +1,7 @@
 """Shared, tenant-scoped non-state backend capabilities.
 
 R1C deliberately keeps this module small: Redis/SQL Session and Memory stay
-owned by :mod:`trpc_service.agent.backend_resolver`; this adds the two missing
+owned by :mod:`trpc_service.storage.backend_resolver`; this adds the two missing
 shared capabilities required by the platform, S3 Artifacts and SQL Knowledge.
 """
 
@@ -17,7 +17,7 @@ from minio import Minio
 from minio.error import S3Error
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+from trpc_service.storage.backend_resolver import TenantStateBackendResolver
 from trpc_service.config.tenant import TenantBackendProfile
 from trpc_service.storage.artifact_repository import SqlArtifactRepository
 from trpc_service.storage.database import DatabaseSettings, check_database_readiness, create_database_engine

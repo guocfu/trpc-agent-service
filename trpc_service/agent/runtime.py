@@ -26,7 +26,7 @@ from trpc_service.agent.execution_coordinator import (
     SessionExecutionIdentity,
     SessionLease,
 )
-from trpc_service.agent.state_backend import AgentStateBackend
+from trpc_service.storage.state_backend import AgentStateBackend
 from trpc_service.config.tenant import TenantConfig
 from trpc_service.telemetry.runtime import SPAN_AGENT_TURN, TelemetryRuntime, safe_span
 from trpc_service.telemetry.sdk_services import instrument_memory_service, instrument_session_service

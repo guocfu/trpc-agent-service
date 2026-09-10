@@ -142,7 +142,7 @@ class FakeBackend:
 
     def check_ready(self) -> None:
         if self.ready_raises:
-            from trpc_service.agent.state_backend import StateBackendConfigurationError
+            from trpc_service.storage.state_backend import StateBackendConfigurationError
             raise StateBackendConfigurationError("Redis is not ready")
 
     async def close(self) -> None:

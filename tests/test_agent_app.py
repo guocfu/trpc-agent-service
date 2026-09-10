@@ -9,7 +9,7 @@ import unittest.mock
 import pytest
 
 from trpc_service.agent.app import AgentApp
-from trpc_service.agent.state_backend import AgentStateBackend
+from trpc_service.storage.state_backend import AgentStateBackend
 from trpc_service.agent.errors import TenantAgentConfigurationError
 from trpc_service.agent.tools import get_current_time
 from trpc_service.config.tenant import TenantConfig

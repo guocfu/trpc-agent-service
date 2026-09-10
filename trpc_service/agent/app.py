@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 from trpc_agent_sdk.events import Event
 
-from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+from trpc_service.storage.backend_resolver import TenantStateBackendResolver
 from trpc_service.agent.errors import TenantAgentConfigurationError
 from trpc_service.agent.execution_coordinator import SessionExecutionCoordinator
 from trpc_service.agent.model_provider import DefaultModelProvider
 from trpc_service.agent.model_provider import ModelProvider
 from trpc_service.agent.runtime import TenantAgentRuntime
-from trpc_service.agent.state_backend import AgentStateBackend
+from trpc_service.storage.state_backend import AgentStateBackend
 from trpc_service.agent.tool_registry import AllowedToolRegistry
 from trpc_service.config.tenant import TenantConfig
 from trpc_service.telemetry.runtime import TelemetryRuntime

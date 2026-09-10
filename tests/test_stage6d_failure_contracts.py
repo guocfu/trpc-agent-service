@@ -81,6 +81,46 @@ def _token() -> InternalToken:
     return InternalToken("d" * 48)
 
 
+class _FakeEndpointClient:
+    """Minimal endpoint client used by routed-client failure contracts."""
+
+    def __init__(self, endpoint_id: str) -> None:
+        self.endpoint_id = endpoint_id
+        self.chat_count = 0
+        self.close_count = 0
+        self.chat_error: WorkerClientError | None = None
+
+    async def start(self) -> None:
+        return None
+
+    async def chat(self, task: WorkerTask) -> WorkerChatResult:
+        self.chat_count += 1
+        if self.chat_error is not None:
+            raise self.chat_error
+        return WorkerChatResult(
+            protocol_version=1,
+            request_id=task.request_id,
+            response="reply",
+            error_code=None,
+        )
+
+    async def stream(self, task: WorkerTask) -> AsyncIterator[WorkerEvent]:
+        if False:
+            yield WorkerEvent(
+                protocol_version=1,
+                request_id=task.request_id,
+                type="done",
+                data=None,
+                error_code=None,
+            )
+
+    async def close(self) -> None:
+        self.close_count += 1
+
+    async def check_health(self, timeout_seconds: float) -> bool:
+        return self.chat_error is None
+
+
 class _FakeExecutionAuditRepository:
     """Records appended delivery facts; optionally fails like an outage."""
 
@@ -164,8 +204,6 @@ async def test_worker_connect_failure_maps_unavailable_once():
 @pytest.mark.asyncio
 async def test_routed_client_calls_one_endpoint_once_and_never_redrives():
     """A failed chat must not be re-issued to the other Worker endpoint."""
-    from tests.test_gateway_routed_client import _FakeEndpointClient
-
     ep_a = WorkerEndpoint.from_url("http://a:8001")
     ep_b = WorkerEndpoint.from_url("http://b:8002")
     client_a = _FakeEndpointClient(ep_a.endpoint_id)
@@ -209,8 +247,6 @@ async def test_routed_client_calls_one_endpoint_once_and_never_redrives():
 @pytest.mark.asyncio
 async def test_all_workers_unhealthy_zero_calls():
     """No healthy endpoint -> fixed WORKER_UNAVAILABLE with zero HTTP calls."""
-    from tests.test_gateway_routed_client import _FakeEndpointClient
-
     ep_a = WorkerEndpoint.from_url("http://a:8001")
     client_a = _FakeEndpointClient(ep_a.endpoint_id)
 

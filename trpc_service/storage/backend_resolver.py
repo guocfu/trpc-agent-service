@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 
-from trpc_service.agent.state_backend import (
+from trpc_service.storage.state_backend import (
     AgentStateBackend,
     RedisStateBackend,
     SqlStateBackend,

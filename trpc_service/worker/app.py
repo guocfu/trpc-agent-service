@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from trpc_service.agent.app import AgentApp
-from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+from trpc_service.storage.backend_resolver import TenantStateBackendResolver
 from trpc_service.agent.execution_coordinator import RedisSessionExecutionCoordinator
 from trpc_service.agent.tool_registry import AllowedToolRegistry
 from trpc_service.config.model import close_model_http_clients

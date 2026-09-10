@@ -11,6 +11,7 @@ from typing import AsyncIterator
 from trpc_service.channels.approval_commands import parse_approval_command
 from trpc_service.channels.identity import ChannelIdentity, project_identity
 from trpc_service.channels.delivery import ChannelExecutionStream
+from trpc_service.channels.ingress import ChannelIngress
 from trpc_service.channels.models import InboundMessage, PublicChannelEvent
 from trpc_service.config.tenant import TenantConfig
 from trpc_service.config.rollout import select_config_version
@@ -67,7 +68,10 @@ class ChannelReply:
     response: str
 
 
-class ChannelIngressService:
+class ChannelIngressService(ChannelIngress):
+    """Gateway implementation of the channels-layer ``ChannelIngress``
+    contract (see ``trpc_service.channels.ingress``): admission, rate
+    gating, rollout-pinned config choice and Worker routing."""
 
     def __init__(
         self,

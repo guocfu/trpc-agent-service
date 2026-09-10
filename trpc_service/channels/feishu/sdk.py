@@ -17,8 +17,9 @@ P0 architecture (verified against installed lark-channel-sdk 1.4.0):
   are acknowledged per chunk, and a normal producer return completes the card.
   ``reply()`` is never used (it has no finished semantics and would fragment
   the conversation).
-- ``lark_channel`` is imported lazily inside :func:`create_feishu_client` so
-  unit tests never import the SDK (and its import-time DeprecationWarnings).
+- ``lark_channel`` can be preloaded synchronously before an application event
+  loop starts; the SDK captures an event loop at import time.  Client creation
+  retains a lazy-import fallback for non-CLI callers.
   SDK controller/result types must not escape this module.
 """
 
@@ -36,6 +37,20 @@ from trpc_service.channels.delivery import ChannelSendError
 logger = logging.getLogger(__name__)
 
 _RAW_EVENT_TYPE = "im.message.receive_v1"
+
+
+def preload_feishu_sdk() -> None:
+    """Import the optional SDK before Uvicorn creates its event loop.
+
+    ``lark-channel-sdk`` captures an event loop during module import and later
+    drives it from its WebSocket worker.  Importing it for the first time from
+    FastAPI lifespan instead captures Uvicorn's already-running loop.  Missing
+    optional SDK installations remain a client-creation error, as before.
+    """
+    try:
+        import lark_channel as _lark_channel  # noqa: F401
+    except ImportError:
+        return
 
 
 def _parse_occurred_at_ms(value: object) -> int | None:
@@ -359,4 +374,5 @@ __all__ = [
     "FeishuInboundFrame",
     "FeishuReplyWriter",
     "create_feishu_client",
+    "preload_feishu_sdk",
 ]

@@ -93,3 +93,100 @@ async def test_success_is_suppressed_but_delivery_failure_is_audited_for_failure
     event = repository.append.await_args.args[0]
     assert event.outcome == "failed"
     assert event.error_code == "channel_delivery_failed"
+
+
+class TestSdkReplySender:
+    """First-write retry policy + exception normalization shared by IM chains."""
+
+    @pytest.mark.asyncio
+    async def test_first_write_retries_then_later_writes_fire_once(self, monkeypatch):
+        from trpc_service.channels.delivery import SdkReplySender
+
+        attempts = 0
+
+        async def operation(text, *, finished):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("sdk glitch")
+
+        sender = SdkReplySender()
+        assert await sender.write(operation, "a", finished=False) is True
+        assert attempts == 2  # normalized error retried once more
+        assert sender.sent is True
+        assert await sender.write(operation, "b", finished=True) is True
+        assert attempts == 3  # no retry after the first visible write
+
+    @pytest.mark.asyncio
+    async def test_unsent_failure_exhausts_retries_and_reports_not_written(self, monkeypatch):
+        from trpc_service.channels.delivery import ChannelSendError, SdkReplySender
+
+        attempts = 0
+
+        async def operation():
+            nonlocal attempts
+            attempts += 1
+            raise ChannelSendError(sent=False)
+
+        sender = SdkReplySender()
+        assert await sender.write(operation) is False
+        assert attempts == 3
+        assert sender.sent is False
+
+    @pytest.mark.asyncio
+    async def test_cancellation_passes_through_unnormalized(self):
+        from trpc_service.channels.delivery import SdkReplySender
+
+        async def operation():
+            raise asyncio.CancelledError
+
+        sender = SdkReplySender()
+        with pytest.raises(asyncio.CancelledError):
+            await sender.write(operation)
+
+
+@pytest.mark.asyncio
+async def test_record_terminal_delivery_maps_platform_failure_categories():
+    from trpc_service.channels.delivery import ChannelExecutionStream, record_terminal_delivery
+    from trpc_service.transport.models import WorkerErrorCode
+
+    async def empty():
+        if False:
+            yield None
+
+    recorded = []
+
+    class Ingress:
+
+        async def stream(self, inbound):
+            return empty()
+
+        async def record_external_delivery(self, execution, code):
+            recorded.append(code)
+
+    ingress = Ingress()
+    execution = ChannelExecutionStream(empty())
+    failures = frozenset({"append_failed", "finish_failed"})
+
+    await record_terminal_delivery(ingress, execution, "append_failed", failure_categories=failures)
+    await record_terminal_delivery(ingress, execution, "done", failure_categories=failures)
+    await record_terminal_delivery(ingress, execution, "missing", failure_categories=failures)
+    assert recorded == [WorkerErrorCode.CHANNEL_DELIVERY_FAILED, None]
+
+
+@pytest.mark.asyncio
+async def test_record_terminal_delivery_tolerates_ingress_without_recorder():
+    from trpc_service.channels.delivery import ChannelExecutionStream, record_terminal_delivery
+
+    async def empty():
+        if False:
+            yield None
+
+    class Ingress:
+
+        async def stream(self, inbound):
+            return empty()
+
+    execution = ChannelExecutionStream(empty())
+    # No crash, no audit: the capability is optional.
+    await record_terminal_delivery(Ingress(), execution, "done", failure_categories=frozenset())

@@ -27,7 +27,7 @@ import uuid
 import pytest
 
 from trpc_service.agent.app import AgentApp
-from trpc_service.agent.backend_resolver import TenantStateBackendResolver
+from trpc_service.storage.backend_resolver import TenantStateBackendResolver
 from trpc_service.config.tenant import TenantConfig
 from trpc_service.tenant.context import TenantContext
 from tests.tenant_helpers import (

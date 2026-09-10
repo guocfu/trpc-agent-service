@@ -7,8 +7,11 @@ only repeats an SDK write that the facade proves did not send any bytes.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Awaitable, Callable
 from typing import AsyncIterator
+
+from trpc_service.transport.models import WorkerErrorCode
 
 
 class ChannelSendError(Exception):
@@ -78,4 +81,83 @@ class ChannelExecutionStream(AsyncIterator[object]):
             await close()
 
 
-__all__ = ["ChannelExecutionStream", "ChannelSendError", "send_with_retry"]
+async def record_terminal_delivery(
+    ingress,
+    execution: ChannelExecutionStream,
+    category: str,
+    *,
+    failure_categories: frozenset[str],
+) -> None:
+    """Append the one SDK-terminal delivery audit fact through the ingress.
+
+    Shared by the external IM services.  ``failure_categories`` names THIS
+    platform's mid-chain SDK-write failure categories, which map to the
+    fixed ``CHANNEL_DELIVERY_FAILED`` code.  Indeterminate categories — a
+    broken Worker stream or a missing terminal — prove nothing about
+    platform delivery, so they never become a delivered (or failed) audit
+    row.  The recorder is an OPTIONAL ingress capability: adapters must
+    tolerate an ingress without it.
+    """
+    recorder = getattr(ingress, "record_external_delivery", None)
+    if recorder is None:
+        return
+    code = WorkerErrorCode.CHANNEL_DELIVERY_FAILED if category in failure_categories else None
+    if code is None and category not in {"done", "error"}:
+        return
+    result = recorder(execution, code)
+    if inspect.isawaitable(result):
+        await result
+
+
+class SdkReplySender:
+    """One IM reply chain's SDK write policy (shared by all platforms).
+
+    - Exception normalization: unexpected SDK errors become the fixed
+      ``ChannelSendError(sent=False)``; cancellation and explicit
+      ``ChannelSendError`` pass through unchanged.
+    - Retry: only the FIRST write retries (bounded ``send_with_retry``);
+      every later write fires exactly once — a partially delivered reply is
+      never replayed, so the platform never sees duplicate messages.
+    """
+
+    def __init__(self) -> None:
+        self._sent = False
+
+    @property
+    def sent(self) -> bool:
+        """Whether at least one write already reached the platform."""
+        return self._sent
+
+    async def write(self, operation: Callable[..., Awaitable[object]], *args, **kwargs) -> bool:
+        """Deliver one SDK write (positional and keyword arguments pass
+        through to the SDK operation); returns whether it completed."""
+
+        async def _once() -> None:
+            try:
+                await operation(*args, **kwargs)
+            except asyncio.CancelledError:
+                raise
+            except ChannelSendError:
+                raise
+            except Exception:
+                raise ChannelSendError(sent=False) from None
+
+        if self._sent:
+            try:
+                await _once()
+            except ChannelSendError:
+                return False
+            return True
+        if not await send_with_retry(_once):
+            return False
+        self._sent = True
+        return True
+
+
+__all__ = [
+    "ChannelExecutionStream",
+    "ChannelSendError",
+    "SdkReplySender",
+    "record_terminal_delivery",
+    "send_with_retry",
+]

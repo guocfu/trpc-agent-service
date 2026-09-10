@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 
-from trpc_service.agent.state_backend import (
+from trpc_service.storage.state_backend import (
     RedisStateBackend,
     StateBackendConfigurationError,
 )
@@ -98,8 +98,8 @@ class TestRedisStateBackendFromEnv:
         assert backend.session_ttl == 3600
         assert backend.memory_ttl == 7200
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     def test_successful_construction(self, mock_memory_cls, mock_session_cls):
         """Valid configuration should construct backend successfully."""
         env = {"TRPC_REDIS_URL": "redis://localhost:6379"}
@@ -111,8 +111,8 @@ class TestRedisStateBackendFromEnv:
         mock_session_cls.assert_called_once()
         mock_memory_cls.assert_called_once()
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     def test_session_service_config(self, mock_memory_cls, mock_session_cls):
         """SessionServiceConfig should be created with correct TTL."""
         env = {
@@ -127,8 +127,8 @@ class TestRedisStateBackendFromEnv:
         session_config = call_args.kwargs.get("session_config")
         assert session_config is not None
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     def test_memory_service_config(self, mock_memory_cls, mock_session_cls):
         """MemoryServiceConfig should be created with correct TTL and enabled."""
         env = {
@@ -148,8 +148,8 @@ class TestRedisStateBackendFromEnv:
 class TestRedisStateBackendReadiness:
     """Test RedisStateBackend.check_ready() method."""
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     def test_check_ready_success(self, mock_memory_cls, mock_session_cls):
         """check_ready() should succeed when Redis is reachable."""
         env = {"TRPC_REDIS_URL": "redis://localhost:6379"}
@@ -167,8 +167,8 @@ class TestRedisStateBackendReadiness:
                 socket_connect_timeout=5.0,
             )
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     def test_check_ready_failure_sanitized(self, mock_memory_cls, mock_session_cls):
         """check_ready() should sanitize Redis failure messages."""
         env = {"TRPC_REDIS_URL": "redis://localhost:6379"}
@@ -188,8 +188,8 @@ class TestRedisStateBackendReadiness:
 class TestRedisStateBackendClose:
     """Test RedisStateBackend.close() method."""
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     @pytest.mark.asyncio
     async def test_close_is_idempotent(self, mock_memory_cls, mock_session_cls):
         """close() should be idempotent and safe to call multiple times."""
@@ -208,8 +208,8 @@ class TestRedisStateBackendClose:
         await backend.close()
         await backend.close()
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     @pytest.mark.asyncio
     async def test_close_async_is_idempotent(self, mock_memory_cls, mock_session_cls):
         """async close() should be idempotent and safe to call multiple times."""
@@ -232,8 +232,8 @@ class TestRedisStateBackendClose:
 class TestAgentStateBackendProtocol:
     """Test AgentStateBackend protocol compliance."""
 
-    @patch("trpc_service.agent.state_backend.RedisSessionService")
-    @patch("trpc_service.agent.state_backend.RedisMemoryService")
+    @patch("trpc_service.storage.state_backend.RedisSessionService")
+    @patch("trpc_service.storage.state_backend.RedisMemoryService")
     def test_backend_implements_protocol(self, mock_memory_cls, mock_session_cls):
         """RedisStateBackend should implement AgentStateBackend protocol."""
         env = {"TRPC_REDIS_URL": "redis://localhost:6379"}
