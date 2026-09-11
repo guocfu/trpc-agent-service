@@ -3,9 +3,9 @@
 | 验收 | 已实现代码/配置 | 聚焦证据 | 最终命令 |
 |---|---|---|---|
 | 1 | Gateway/Worker、tenant config、Redis/SQL/S3、Filter、OTel、Compose/Kubernetes | `tests/test_r3_kubernetes.py`、架构图 | `bash scripts/acceptance_final.sh` |
-| 2 | `storage/schema.py`、迁移 `0001`–`0012` | `tests/integration/test_sql_migrations.py` | `pytest -q tests/integration` |
+| 2 | `storage/schema.py`、迁移 `0001`–`0014` | `tests/integration/test_sql_migrations.py` | `pytest -q tests/integration` |
 | 3 | `channels/wecom`、`channels/feishu`、`channels/webhook`、`ChannelBinding` | `tests/test_wecom_service.py`、`tests/test_feishu_service.py`、`tests/test_webhook_routes.py`、`tests/integration/test_webhook_ingress.py` | `bash scripts/acceptance_webhook.sh` |
-| 4 | Redis state、PostgreSQL repositories、`S3ArtifactService`、租户 `knowledge_search` | `tests/integration/test_r1_multibackend_state.py`、`test_r1_artifact_knowledge.py`、`tests/test_agent_components.py` | `bash scripts/acceptance_final.sh` |
+| 4 | Redis state、PostgreSQL repositories、`S3ArtifactService`、租户 `knowledge_search` | `tests/integration/test_r1_multibackend_state.py`、`tests/integration/test_r1_artifact_knowledge.py`、`tests/test_agent_components.py` | `bash scripts/acceptance_final.sh` |
 | 5 | `telemetry/`、Gateway/Worker tracing、IM service | `tests/test_telemetry.py`、`tests/test_trace_flow.py`、`tests/test_wecom_service.py` | `bash scripts/acceptance_final.sh` |
 | 6 | `docs/production-risks.md` 与 R3 fault matrix | `bash scripts/acceptance_r3_operations.sh` | `bash scripts/acceptance_final.sh` |
 | 7 | `agent/`、`governance/`、`channels/` 平台边界 | `docs/architecture.md` 责任矩阵 | `pytest -q tests/test_agent_components.py tests/test_governance_tool_filter.py` |

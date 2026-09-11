@@ -13,7 +13,7 @@
 | 企业微信核心时序图 | 已提供 Mermaid 时序图，覆盖入站、Tool、Session/Memory、审计与回复 | [完整消息链路](docs/architecture.md#完整企业微信消息链路) |
 | 数据模型设计 | 已提供核心实体、关系、表结构、版本链和迁移说明 | [docs/data-model.md](docs/data-model.md) |
 | 数据同步和幂等策略 | 已提供并发写入、事件顺序、跨节点可见性、重复/乱序和迁移策略 | [docs/data-sync-idempotency.md](docs/data-sync-idempotency.md) |
-| 多后端适配方案 | 已提供 Redis、PostgreSQL、向量检索、MinIO/S3 的职责和一致性取舍 | [docs/backend-strategy.md](docs/backend-strategy.md) |
+| 多后端适配方案 | 已提供 Redis、PostgreSQL、MinIO/S3 的实现与向量检索扩展边界 | [docs/backend-strategy.md](docs/backend-strategy.md) |
 | 生产风险清单 | 已提供不少于 8 项风险、影响和缓解措施 | [docs/production-risks.md](docs/production-risks.md) |
 | GitHub 工程实现 | 当前仓库即完整 Python 实现，包含源码、迁移、部署和验收脚本 | [trpc_service](trpc_service)、[migrations](migrations)、[compose.yaml](compose.yaml)、[deploy/k8s](deploy/k8s) |
 | 验收证据矩阵 | 已将每项验收标准映射到实现、测试和命令 | [docs/acceptance-matrix.md](docs/acceptance-matrix.md) |
@@ -31,9 +31,9 @@
 ### 数据同步与多后端
 
 - Redis：Session 热状态、Memory、租约、限流、排序水位和短期协调。
-- PostgreSQL：租户配置、版本历史、ChannelBinding、消息收据、审计、用量、审批和 Knowledge 目录。
-- MinIO/S3：Artifact 与 Knowledge 原始字节；数据库只保存元数据和对象键。
-- 向量后端：Knowledge 检索索引，通过租户 backend profile 解析，不作为配置或审计事实源。
+- PostgreSQL：租户配置、版本历史、ChannelBinding、消息收据、审计、用量、审批，以及当前 Knowledge 文档与全文检索索引。
+- MinIO/S3：Artifact 对象字节；PostgreSQL 保存其元数据、版本状态和对象键。
+- 向量后端：保存 Knowledge chunk embedding、向量索引和租户过滤元数据，适合大规模语义检索。
 - Session event、state、summary 按固定顺序提交；消息收据和稳定 `message_id` 防止 IM 重投导致模型或工具重复执行。
 - 提供离线 `state-backend-migrate`，迁移前冻结租户流量，校验后通过新配置版本切换。
 
@@ -70,7 +70,7 @@ Compose 使用独立 project、network 和 named volumes 管理自己的资源�
 - init Job 是唯一数据库迁移执行者，业务 Pod 等待迁移完成。
 - 使用集群 Secret/KMS 替换示例 Secret，不提交实际凭据。
 - 使用 HTTPS Ingress 暴露 Gateway 回调；Admin 只允许管理网络访问。
-- 使用托管 Redis、PostgreSQL、对象存储和向量服务替换最小单实例后端。
+- 使用托管 Redis、PostgreSQL 和对象存储替换最小单实例后端；需要大规模语义检索时再接入租户隔离的向量服务。
 
 企业微信 HTTPS Ingress 模板见 [deploy/k8s/gateway-ingress.example.yaml](deploy/k8s/gateway-ingress.example.yaml)。模板默认不加入 Kustomization，必须先替换 `REPLACE_WITH_PUBLIC_HOST` 和 `REPLACE_WITH_TLS_SECRET`，且不要暴露 Admin，避免误发布占位配置或管理接口。
 
@@ -199,7 +199,7 @@ kubectl kustomize deploy/k8s >/dev/null
 | 1. 覆盖多租户、节点化部署、数据同步、多后端、IM、治理监控和故障恢复 | [架构设计](docs/architecture.md)、Compose、Kubernetes、治理与故障代码 |
 | 2. 模型表达 tenant、agent、channel binding、session、event、memory、summary、audit | [数据模型](docs/data-model.md)、[SQLAlchemy schema](trpc_service/storage/schema.py)、Alembic 迁移 |
 | 3. 至少两种 IM，且包含微信或企业微信 | 企业微信 AI Bot/HTTP callback 与飞书 Adapter；差异见 [架构文档](docs/architecture.md#im-账号绑定认证与平台差异) |
-| 4. 至少三类后端及同步策略 | Redis、PostgreSQL、向量后端、MinIO/S3，见 [后端策略](docs/backend-strategy.md) |
+| 4. 至少三类后端及同步策略 | Redis、PostgreSQL、MinIO/S3，并说明可选向量后端边界，见 [后端策略](docs/backend-strategy.md) |
 | 5. 完整消息链路并贯穿 trace_id/request_id | [企业微信时序图](docs/architecture.md#完整企业微信消息链路) 与 telemetry 实现 |
 | 6. 至少 8 个生产风险及缓解措施 | [生产风险清单](docs/production-risks.md) |
 | 7. 明确框架复用与平台新增能力 | [责任边界](docs/architecture.md#trpc-agent-python-与平台层责任) |

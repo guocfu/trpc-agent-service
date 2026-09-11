@@ -14,4 +14,4 @@ IM 发送重试只作用于尚未发送的 SDK 操作，最多三次；已部分
 
 ## 后端迁移
 
-`state-backend-migrate` 的离线流程读取明确 tenant/app/version namespace，导出 canonical Event/State/Memory/Summary 快照及摘要 digest，再写入目标 Redis 或 SQL 并校验 digest；目标不匹配或源/目标不可用即失败，不切换配置。验证后用版本化 tenant config 将 `state_backend` 前向切换；回滚为新版本指向旧 backend，而非重写历史。Knowledge 当前是 SQL 实现，未实现本地向量库到远端向量库迁移，不能将该能力作为交付事实。
+`state-backend-migrate` 的离线流程读取明确 tenant/app/version namespace，导出 canonical Event/State/Memory/Summary 快照及摘要 digest，再写入目标 Redis 或 SQL 并校验 digest；目标不匹配或源/目标不可用即失败，不切换配置。验证后用版本化 tenant config 将 `state_backend` 前向切换；回滚为新版本指向旧 backend，而非重写历史。Knowledge 向量索引迁移以 SQL 文档和版本为事实源，在目标端重建 tenant-scoped 索引，完成文档数、版本和抽样查询校验后切换索引别名；旧索引保留一个回滚窗口。

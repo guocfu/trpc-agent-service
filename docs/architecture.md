@@ -10,9 +10,10 @@ flowchart LR
   G -->|内部认证/SSE| WA[Worker A]
   G -->|内部认证/SSE| WB[Worker B]
   G --> A[Admin API]
-  WA & WB --> R[Redis: Session/Memory/lease]
-  WA & WB --> P[PostgreSQL: config/receipt/audit]
-  WA & WB --> S[MinIO/S3: Artifact bytes]
+  WA & WB --> SA[Storage Adapters]
+  SA --> R[Redis: Session/Memory/lease]
+  SA --> P[PostgreSQL: config/receipt/audit]
+  SA --> S[MinIO/S3: Artifact bytes]
   WA & WB --> SDK[tRPC-Agent-Python Runner/Filter/Tool]
   G & WA & WB --> O[OTel Collector]
   A --> P
@@ -40,9 +41,10 @@ sequenceDiagram
   C->>G: Unbound message
   G->>P: 查 ChannelBinding 和配置版本
   G->>G: 生成 request_id，继续/新建 trace_id
-  G->>R: IM 乱序水位与 Session 租约
+  G->>R: 检查并更新 IM 乱序水位
   G->>W: 受内部 token 保护的任务(request_id, traceparent)
   W->>P: claim receipt / accepted audit
+  W->>R: 获取 Session 分布式租约
   W->>SDK: Runner(session, projected user)
   SDK->>M: 模型调用
   SDK->>SDK: Filter 后执行允许的 Tool
@@ -52,6 +54,7 @@ sequenceDiagram
   G-->>C: PublicChannelEvent
   C-->>U: 分片流式回复
   W->>P: terminal receipt + execution audit
+  W->>R: 释放 Session 分布式租约
   G->>P: delivery_result audit
 ```
 
