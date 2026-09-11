@@ -33,7 +33,7 @@
 - Redis：Session 热状态、Memory、租约、限流、排序水位和短期协调。
 - PostgreSQL：租户配置、版本历史、ChannelBinding、消息收据、审计、用量、审批，以及当前 Knowledge 文档与全文检索索引。
 - MinIO/S3：Artifact 对象字节；PostgreSQL 保存其元数据、版本状态和对象键。
-- 向量后端：保存 Knowledge chunk embedding、向量索引和租户过滤元数据，适合大规模语义检索。
+- 生产扩展可使用向量库保存 Knowledge chunk embedding、向量索引和租户过滤元数据，适合大规模语义检索。
 - Session event、state、summary 按固定顺序提交；消息收据和稳定 `message_id` 防止 IM 重投导致模型或工具重复执行。
 - 提供离线 `state-backend-migrate`，迁移前冻结租户流量，校验后通过新配置版本切换。
 
@@ -118,8 +118,6 @@ curl -fsS http://127.0.0.1:${TRPC_GATEWAY_PUBLISH_PORT:-8000}/health
 curl -fsS http://127.0.0.1:${TRPC_ADMIN_PUBLISH_PORT:-8003}/health
 ```
 
-打开 `http://127.0.0.1:${TRPC_GATEWAY_PUBLISH_PORT:-8000}/` 使用 Web Console。Console 与 IM 共用 ChannelIngress、Worker、治理、幂等和审计链路，但不能替代真实 IM 平台验收。
-
 ```bash
 docker compose down -v
 ```
@@ -162,6 +160,27 @@ Gateway 按企业微信协议执行签名验证和解密。GET 返回解密后�
 
 飞书 binding 使用 App ID 标识外部账号，App Secret 通过 `secret_ref` 注入。事件进入与企业微信相同的租户解析、身份投影、幂等、治理和 Worker 链路，回复使用飞书流式卡片协议。
 
+## 快速验收
+
+按“快速开始”完成 `.env` 配置后，在仓库根目录执行：
+
+```bash
+bash scripts/acceptance_final.sh --preflight
+bash scripts/acceptance_final.sh
+```
+
+`--preflight` 检查部署配置和本地依赖；完整脚本自动启动隔离的 Compose 拓扑，验证真实模型、双 Worker、共享后端、租户隔离、幂等、治理、审计和故障恢复，成功时输出 `PASS` 并自动清理本次创建的资源。
+
+真实 IM 验收只需额外完成以下步骤：
+
+1. 复制 `deploy/im.env.example` 为 `deploy/im.env`，填入企业微信 Bot Secret 和飞书 App Secret。
+2. 执行 `docker compose up --build --wait`，打开 Admin API 文档 `http://127.0.0.1:${TRPC_ADMIN_PUBLISH_PORT:-8003}/docs`。
+3. 调用 `POST /admin/v1/tenants/{tenant_id}/channel-bindings` 创建 binding，请求携带 `X-TRPC-Admin-Token`。企业微信填写 Bot ID 和 `secret_ref=env:TRPC_WECOM_BOT_SECRET`；飞书填写 App ID 和 `secret_ref=env:TRPC_FEISHU_APP_SECRET`。
+4. 日志出现 `WeCom AI Bot authenticated and started`、`Feishu AI Bot connected and ready` 后，分别向两个机器人发送消息并确认收到回复。
+5. 复用同一会话连续发送消息，再从不同机器人或不同会话发送消息，确认上下文连续且互不串话。
+
+凭据只保存在已被 Git 忽略的 `.env` 或 `deploy/im.env`；验收完成后执行 `docker compose down -v`。
+
 ## 运维与故障恢复
 
 - Worker、模型、工具、Redis、PostgreSQL 和 IM 失败统一映射为固定安全结果，不泄漏正文或凭据。
@@ -182,7 +201,7 @@ bash scripts/acceptance_final.sh
 
 `--preflight` 只验证 Compose 结构和本地依赖，不启动拓扑。完整验收使用唯一 Compose project 和自动选择的空闲宿主端口，验证真实模型、双 Worker、共享后端、真实 Gateway Webhook URL 验证、租户隔离、幂等、治理、审批、审计、灰度和故障契约；退出时只清理本次创建的容器、网络和卷。
 
-未配置真实企业微信或飞书账号时，外部 IM 项固定记录为 `external_unavailable`，不能用 Web Console、模拟 SDK 或 Bot ID/Bot Secret 冒充标准 HTTP callback 验收。
+企业微信和飞书的真实消息验收按“快速验收”中的 IM 步骤执行，并以平台实际收发结果作为验收证据。
 
 ```bash
 bash scripts/acceptance_webhook.sh
@@ -217,7 +236,7 @@ trpc_service/
 ├── storage/        # Redis/SQL/S3/Knowledge/审计仓储
 ├── telemetry/      # Trace、指标和日志关联
 ├── worker/         # 无状态执行节点与审批恢复
-└── web/            # Web Console
+└── web/            # HTTP 请求/响应模型与静态资源
 
 migrations/         # Alembic 数据库迁移
 deploy/k8s/         # 生产推荐 Kubernetes 清单

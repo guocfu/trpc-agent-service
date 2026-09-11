@@ -2,6 +2,8 @@
 
 本平台将公网入口、执行节点和共享数据层分开。租户配置、绑定、审计和元数据保存在 PostgreSQL；Redis 提供共享 Session/Memory 与跨 Worker 互斥；MinIO/S3 保存 Artifact 字节。Worker 因而不保存会话本地真相，不需要 sticky session：Gateway 用 Rendezvous Hashing 优先选择节点，节点故障时由其他健康 Worker 从共享后端继续处理；同一 Session 仍由 Redis 租约串行化。
 
+## 系统拓扑
+
 ```mermaid
 flowchart LR
   W[企业微信] --> CA[WeCom Channel Adapter]
